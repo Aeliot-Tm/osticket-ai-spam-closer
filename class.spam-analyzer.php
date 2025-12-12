@@ -10,6 +10,7 @@ class AISpamCloserAnalyzer {
     
     private ?AISpamCloserAPIClient $apiClient = null;
     private AISpamCloserConfig $config;
+    private $notePoster = 'AI Spam Closer';
     
     public function __construct(AISpamCloserConfig $config) {
         $this->config = $config;
@@ -38,19 +39,11 @@ class AISpamCloserAnalyzer {
     /**
      * Analyze ticket and determine if it's spam
      * 
-     * @param int $ticket_id Ticket ID
+     * @param Ticket $ticket
      * @return array Result with spam detection
      */
-    public function analyzeTicket($ticket_id) {
+    public function analyzeTicket($ticket) {
         try {
-            $ticket = Ticket::lookup($ticket_id);
-            
-            if (!$ticket) {
-                return array(
-                    'success' => false,
-                    'error' => 'Ticket not found'
-                );
-            }
             
             // Get spam keywords
             $keywords = $this->config->getSpamKeywords();
@@ -551,7 +544,7 @@ class AISpamCloserAnalyzer {
      * 
      * @param Ticket $ticket
      * @param string $reason Reason for closing
-     * @return bool Success status
+     * @return array{closed: bool, message: string } Success status
      */
     public function closeTicket($ticket, $reason) {
         try {
@@ -561,7 +554,7 @@ class AISpamCloserAnalyzer {
                 if ($this->config->get('enable_logging')) {
                     error_log("AI Spam Closer - Ticket already closed");
                 }
-                return false;
+                return ['closed' => false, 'message' => 'Spam detected but ticket was not closed(Ticket already closed)'];
             }
             
             // Get close reason text from config
@@ -575,7 +568,7 @@ class AISpamCloserAnalyzer {
                 htmlspecialchars($reason)
             );
             
-            $ticket->logNote($note_title, $note_body, 'SYSTEM', false);
+            $ticket->logNote($note_title, $note_body, $this->notePoster, false);
             
             // Close the ticket
             // Find a closed status
@@ -587,26 +580,23 @@ class AISpamCloserAnalyzer {
                 }
             }
             
-            if ($closed_status) {
-                $ticket->setStatus($closed_status);
-                
-                if ($this->config->get('enable_logging')) {
-                    error_log("AI Spam Closer - Successfully closed ticket #{$ticket->getNumber()} as spam");
-                }
-                
-                return true;
-            } else {
+            if (!$closed_status) {
                 if ($this->config->get('enable_logging')) {
                     error_log("AI Spam Closer - No closed status found");
                 }
-                return false;
+                
+                return ['closed' => false, 'message' => 'Spam detected but ticket was not closed (No closed status found)'];
             }
+            
+            $ticket->setStatus($closed_status);
+            
+            return ['closed' => true, 'message' => 'Ticket identified as spam and closed'];
             
         } catch (Exception $e) {
             if ($this->config->get('enable_logging')) {
                 error_log("AI Spam Closer - Close failed: " . $e->getMessage());
             }
-            return false;
+            return ['closed' => false, 'message' => 'Spam detected but ticket was not closed. EXCEPTION: ' . $e->getMessage()];
         }
     }
     
@@ -621,7 +611,7 @@ class AISpamCloserAnalyzer {
             $note_title = 'Spam Check - Not Performed';
             $note_body = 'Automatic spam check was not performed.<br><br>Reason: ' . htmlspecialchars($reason);
             
-            $ticket->logNote($note_title, $note_body, 'SYSTEM', false);
+            $ticket->logNote($note_title, $note_body, $this->notePoster, false);
             
         } catch (Exception $e) {
             if ($this->config->get('enable_logging')) {

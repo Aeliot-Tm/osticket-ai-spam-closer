@@ -202,36 +202,10 @@ class AISpamCloserConfig extends PluginConfig {
     
     /**
      * Get parsed spam keywords
-     * @return array
+     * @return string[]
      */
     function getSpamKeywords() {
-        $keywords = $this->get('spam_keywords');
-        
-        if ($this->get('enable_logging')) {
-            error_log("AI Spam Closer Config - Raw keywords length: " . strlen($keywords));
-            error_log("AI Spam Closer Config - Raw keywords (first 200 chars): " . substr($keywords, 0, 200));
-        }
-        
-        if (empty($keywords)) {
-            if ($this->get('enable_logging')) {
-                error_log("AI Spam Closer Config - Keywords are empty");
-            }
-            return array();
-        }
-        
-        // Parse keywords (comma or semicolon separated)
-        $keyword_list = preg_split('/[,;]/', $keywords);
-        $keyword_list = array_map('trim', $keyword_list);
-        $keyword_list = array_filter($keyword_list); // Remove empty values
-        
-        if ($this->get('enable_logging')) {
-            error_log("AI Spam Closer Config - Parsed " . count($keyword_list) . " keywords");
-            foreach ($keyword_list as $idx => $kw) {
-                error_log("AI Spam Closer Config - Keyword[$idx]: '" . $kw . "' (length: " . strlen($kw) . ")");
-            }
-        }
-        
-        return $keyword_list;
+        return array_filter(array_map('trim', preg_split('/[,;]/', (string) $this->get('spam_keywords', ''))));
     }
 }
 

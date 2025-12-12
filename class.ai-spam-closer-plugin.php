@@ -51,36 +51,41 @@ class AISpamCloserPlugin extends Plugin {
                 error_log("AI Spam Closer - Processing new ticket #" . $ticket->getNumber());
             }
             
-            // Analyze ticket
-            $analyzer = new AISpamCloserAnalyzer($config);
-            $result = $analyzer->analyzeTicket($ticket->getId());
-            
-            if ($result['success'] && isset($result['is_spam']) && $result['is_spam']) {
-                // Close ticket
-                $closed = $analyzer->closeTicket(
-                    $ticket,
-                    $result['reason']
-                );
-                
-                if ($config->get('enable_logging')) {
-                    if ($closed) {
-                        error_log("AI Spam Closer - Closed ticket #" . $ticket->getNumber() . " as spam");
-                    } else {
-                        error_log("AI Spam Closer - Failed to close ticket #" . $ticket->getNumber());
-                    }
-                }
-            } else {
-                // Not spam
-                if ($config->get('enable_logging')) {
-                    error_log("AI Spam Closer - Ticket #" . $ticket->getNumber() . " is not spam");
-                }
-            }
+            $this->tryCloseTicket($ticket);
             
         } catch (Exception $e) {
             if ($config->get('enable_logging')) {
                 error_log("AI Spam Closer - Exception processing ticket: " . $e->getMessage());
             }
         }
+    }
+    
+    /**
+     * @param Ticket $ticket
+     * @return array
+     */
+    public function tryCloseTicket($ticket)
+    {
+        $config = $this->getConfig();
+        
+        // Analyze ticket
+        $analyzer = new AISpamCloserAnalyzer($config);
+        $result = $analyzer->analyzeTicket($ticket);
+        
+        if ($result['success'] && isset($result['is_spam']) && $result['is_spam']) {
+            // Close ticket
+            $result = array_merge($result, $analyzer->closeTicket(
+                $ticket,
+                $result['reason']
+            ));
+        }
+        
+        if ($result['success'] && isset($result['is_spam']) && !$result['is_spam']) {
+            $result = array_merge($result, ['closed' => false, 'message' => 'No spam keywords detected']);
+            $analyzer->logCheckFailure($ticket, 'No spam keywords detected');
+        }
+        
+        return $result;
     }
     
     /**
