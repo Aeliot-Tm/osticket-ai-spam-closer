@@ -73,6 +73,13 @@ This plugin for [osTicket](https://github.com/osTicket/osTicket) automatically d
    - Default: `30` seconds
    - Increase if you experience timeout errors
 
+6. **Temperature** - controls response randomness (0.0-2.0)
+   - Lower values = more deterministic responses
+   - Higher values = more creative/random responses
+   - Default: `0.3` (recommended for classification tasks)
+   - Range: 0.0 to 2.0
+   - **Note**: Lower temperature values (0.0-0.5) are recommended for spam detection to ensure consistent, deterministic results
+
 ### Spam Detection Settings
 
 1. **Spam Keywords (Fallback)** - backup keywords for when AI is unavailable or as fast first-pass filter
@@ -255,8 +262,9 @@ verify account, update payment, account suspended, security alert, click to conf
 2. Check API URL is correct (for Custom provider)
 3. Ensure API Timeout is sufficient (increase if requests timeout)
 4. Verify model name is correct and available
-5. Check system logs for API errors
-6. Test API connection manually
+5. Check Temperature value is within range (0.0-2.0)
+6. Check system logs for API errors
+7. Test API connection manually
 
 ### Files are not processed
 
@@ -268,7 +276,7 @@ verify account, update payment, account suspended, security alert, click to conf
 ### False positives (legitimate tickets closed as spam)
 
 1. Review spam keywords - remove or refine overly broad terms
-2. Adjust AI confidence threshold (if configurable in future versions)
+2. Lower Temperature value (e.g., 0.1-0.2) for more deterministic, conservative detection
 3. Review AI analysis results in debug logs
 4. Consider disabling auto-close and using manual trigger only
 5. Add exceptions to keywords list
@@ -318,7 +326,7 @@ For Custom API providers, check your provider's pricing.
 ### API Client
 - Class: `AISpamCloserAPIClient`
 - Supports OpenAI and OpenAI-compatible endpoints
-- Temperature: fixed at 0.3 (deterministic responses for classification)
+- Temperature: configurable (default: 0.3, range: 0.0-2.0)
 - JSON mode: enabled for structured responses
 
 ### File Processing

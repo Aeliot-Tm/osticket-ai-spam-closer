@@ -20,12 +20,17 @@ class AISpamCloserAnalyzer {
         $model = trim((string)$config->get('model'));
         
         if ($api_key && $model && $api_url) {
+            $temperature = $config->get('temperature');
+            if ('' === trim((string)$temperature)) {
+                $temperature = 0.3;
+            }
             $this->apiClient = new AISpamCloserAPIClient(
                 $api_key,
                 $model,
                 $api_url,
                 (int) $config->get('timeout', 30),
-                (bool) $config->get('enable_logging', false)
+                (bool) $config->get('enable_logging', false),
+                (float) $temperature
             );
         }
     }
