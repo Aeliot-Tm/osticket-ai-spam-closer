@@ -1,6 +1,6 @@
 <?php
 
-require_once('class.openai-client.php');
+require_once('class.api-client.php');
 
 /**
  * Spam Analyzer
@@ -8,26 +8,25 @@ require_once('class.openai-client.php');
  */
 class AISpamCloserAnalyzer {
     
-    private $config;
-    private $openai;
+    private ?AISpamCloserAPIClient $apiClient = null;
+    private AISpamCloserConfig $config;
     
-    public function __construct($config) {
+    public function __construct(AISpamCloserConfig $config) {
         $this->config = $config;
         
-        // Only initialize OpenAI if API key is provided
-        $api_key = $config->get('api_key');
-        if (!empty($api_key) && trim($api_key) !== '') {
-            $this->openai = new AISpamCloserOpenAIClient(
+        // Only initialize API client if credentials are provided
+        $api_key = trim((string)$config->get('api_key'));
+        $api_url = trim((string)$config->get('api_url'));
+        $model = trim((string)$config->get('model'));
+        
+        if ($api_key && $model && $api_url) {
+            $this->apiClient = new AISpamCloserAPIClient(
                 $api_key,
-                $config->get('model'),
-                $config->get('timeout'),
-                $config->get('enable_logging')
+                $model,
+                $api_url,
+                (int) $config->get('timeout', 30),
+                (bool) $config->get('enable_logging', false)
             );
-        } else {
-            $this->openai = null;
-            if ($config->get('enable_logging')) {
-                error_log("AI Spam Closer - OpenAI API key not configured, using keywords only");
-            }
         }
     }
     
@@ -107,7 +106,7 @@ class AISpamCloserAnalyzer {
             }
             
             // Use AI for deeper analysis if no keywords matched (and AI is available)
-            if ($this->openai === null) {
+            if ($this->apiClient === null) {
                 // No AI configured, keywords didn't match
                 if ($this->config->get('enable_logging')) {
                     error_log("AI Spam Closer - No AI available, no keyword matches found");
@@ -126,7 +125,7 @@ class AISpamCloserAnalyzer {
                 return $result;
             }
             
-            $aiResult = $this->openai->analyzeSpam($content, $keywords);
+            $aiResult = $this->apiClient->analyzeSpam($content, $keywords);
             
             if ($aiResult['success']) {
                 if ($aiResult['is_spam']) {
@@ -310,7 +309,7 @@ class AISpamCloserAnalyzer {
             error_log("AI Spam Closer - Processing image file: " . $file->getName() . " (mime: " . $mime_type . ", size: " . strlen($file_data) . " bytes)");
         }
         
-        $result = $this->openai->extractTextFromImage($file_data, $mime_type);
+        $result = $this->apiClient->extractTextFromImage($file_data, $mime_type);
         
         if ($result['success']) {
             if ($this->config->get('enable_logging')) {
