@@ -30,7 +30,7 @@ function usage() {
 function build() {
     echo "Building PHAR for plugin\n";
 
-    $phar_name = 'osticket-ai-auto-dept-transfer.phar';
+    $phar_name = 'osticket-ai-spam-closer.phar';
     
     // Remove existing PHAR if it exists
     if (file_exists($phar_name)) {
