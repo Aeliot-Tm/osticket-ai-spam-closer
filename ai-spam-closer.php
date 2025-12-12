@@ -4,12 +4,12 @@ require_once(INCLUDE_DIR . 'class.plugin.php');
 require_once(INCLUDE_DIR . 'class.signal.php');
 require_once(INCLUDE_DIR . 'class.dispatcher.php');
 require_once('class.ai-spam-closer-plugin.php');
-require_once('class.openai-client.php');
+require_once('class.api-client.php');
 require_once('class.spam-analyzer.php');
 require_once('config.php');
 
 /**
- * @return AISpamCloserConfig
+ * @return AISpamCloserPlugin
  */
 function get_plugin_ai_spam_closer() {
     // Get plugin instance

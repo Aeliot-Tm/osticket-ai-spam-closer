@@ -1,0 +1,16 @@
+---
+alwaysApply: true
+---
+
+## Plugin `osticket-ai-spam-closer`
+
+- **Purpose**: Automatically detects spam tickets using AI and safely closes them to reduce agent workload.
+- **Where to apply these rules**: any changes under `include/plugins/osticket-ai-spam-closer/*`, including analyzers, spam threshold configuration, and front-end components.
+- **What must be preserved**:
+  - Configurable thresholds and spam detection parameters must remain predictable and safely adjustable via the UI.
+  - Avoid aggressive logic changes that increase the risk of false positives; default behavior should be conservative.
+  - Do not delete ticket data without an explicit policy/confirmation — the plugin should primarily close/mark tickets, not destroy them.
+- **Integrations and dependencies**: when modifying interactions with queues and notifications, ensure customer and agent notifications are not broken and stay aligned with global osTicket policies.
+- **Stack**:
+    - PHP 8.2
+    - osTicket: 1.18

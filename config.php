@@ -3,30 +3,101 @@
 require_once(INCLUDE_DIR . 'class.plugin.php');
 require_once(INCLUDE_DIR . 'class.forms.php');
 
+/**
+ * Custom field for Model selection that switches between dropdown and textbox
+ */
+class AISpamCloserModelField extends TextboxField {
+    static $widget = 'AISpamCloserModelWidget';
+}
+
+class AISpamCloserModelWidget extends Widget {
+    function render($options=array()) {
+        $name = $this->name;
+        $value = $this->value;
+
+        // OpenAI models list
+        $models = array(
+            // GPT-5 series (latest)
+            'gpt-5.2' => 'GPT-5.2 (Latest, improved reasoning)',
+            'gpt-5.1' => 'GPT-5.1 (Coding & agentic tasks)',
+            'gpt-5.1-codex' => 'GPT-5.1 Codex (Optimized for code)',
+            'gpt-5.1-codex-mini' => 'GPT-5.1 Codex Mini',
+            'gpt-5.1-codex-max' => 'GPT-5.1 Codex Max (Project-scale coding)',
+            'gpt-5-mini' => 'GPT-5 Mini (Fast, 400K context)',
+            'gpt-5-nano' => 'GPT-5 Nano (Fastest, cheapest)',
+            // Reasoning models (o-series) - think longer before responding
+            'o3' => 'o3 (Most advanced reasoning)',
+            'o3-mini' => 'o3-mini (Cost-efficient reasoning)',
+            'o4-mini' => 'o4-mini (Latest compact reasoning)',
+            'o1' => 'o1 (Extended reasoning)',
+            'o1-mini' => 'o1-mini (Compact reasoning)',
+            // GPT-4.1 series - improved coding & long context
+            'gpt-4.1' => 'GPT-4.1 (Best for coding, 1M context)',
+            'gpt-4.1-mini' => 'GPT-4.1 Mini (Balanced)',
+            'gpt-4.1-nano' => 'GPT-4.1 Nano (Fastest)',
+            // GPT-4o series - multimodal
+            'gpt-4o' => 'GPT-4o (Multimodal, capable)',
+            'gpt-4o-mini' => 'GPT-4o Mini (Fast and affordable)',
+            // Legacy models
+            'gpt-4-turbo' => 'GPT-4 Turbo (Legacy)',
+            'gpt-3.5-turbo' => 'GPT-3.5 Turbo (Cheapest, legacy)'
+        );
+        ?>
+        <input type="hidden" name="<?php echo $name; ?>" id="model_value" value="<?php echo Format::htmlchars($value); ?>" />
+        <select id="model_select" class="model-select-dropdown" style="width: 350px;">
+            <?php foreach ($models as $model_id => $model_name): ?>
+                <option value="<?php echo $model_id; ?>" <?php if ($value === $model_id) echo 'selected="selected"'; ?>>
+                    <?php echo Format::htmlchars($model_name); ?>
+                </option>
+            <?php endforeach; ?>
+        </select>
+        <input type="text" id="model_text" class="model-text-input"
+               value="<?php echo Format::htmlchars($value); ?>"
+               placeholder="Enter model name (e.g., gpt-4o-mini)"
+               style="width: 350px; padding: 5px;" />
+        <script type="text/javascript"><?php readfile(__DIR__ . '/js/config-api-provider.js'); ?></script>
+        <?php
+    }
+}
+
 class AISpamCloserConfig extends PluginConfig {
     
     function getOptions() {
         return array(
+            'api_provider' => new ChoiceField(array(
+                'label' => __('API Provider'),
+                'default' => 'openai',
+                'choices' => array(
+                    'openai' => 'Open AI',
+                    'custom' => 'Custom'
+                ),
+                'hint' => __('Choose API provider type')
+            )),
             'api_key' => new TextboxField(array(
-                'label' => __('OpenAI API Key (Optional)'),
+                'label' => __('API Key'),
                 'required' => false,
                 'configuration' => array(
                     'size' => 60,
                     'length' => 500,
                     'placeholder' => 'sk-... (leave empty to use keywords only)'
                 ),
-                'hint' => __('Your OpenAI API key for AI analysis. Leave empty to use only keyword matching. Get key from https://platform.openai.com/api-keys')
+                'hint' => __('Your API key. Leave empty to use only keyword matching. Get key for example from https://platform.openai.com/api-keys')
             )),
-            'model' => new ChoiceField(array(
-                'label' => __('OpenAI Model'),
-                'default' => 'gpt-4o-mini',
-                'choices' => array(
-                    'gpt-4o' => 'GPT-4o (Most capable, expensive)',
-                    'gpt-4o-mini' => 'GPT-4o Mini (Fast and affordable)',
-                    'gpt-4-turbo' => 'GPT-4 Turbo',
-                    'gpt-3.5-turbo' => 'GPT-3.5 Turbo (Cheapest)'
+            'api_url' => new TextboxField(array(
+                'label' => __('API URL'),
+                'required' => false,
+                'configuration' => array(
+                    'size' => 60,
+                    'length' => 500,
+                    'placeholder' => 'https://api.example.com/v1/chat/completions'
                 ),
-                'hint' => __('Choose the model to use for spam analysis')
+                'hint' => __('Custom API endpoint URL (compatible with OpenAI)')
+            )),
+            'model' => new AISpamCloserModelField(array(
+                'label' => __('Model Name'),
+                'default' => 'gpt-4o-mini',
+                'required' => true,
+                'hint' => __('Select or enter the model name to use for analysis')
             )),
             'timeout' => new TextboxField(array(
                 'label' => __('API Timeout (seconds)'),
@@ -94,6 +165,21 @@ class AISpamCloserConfig extends PluginConfig {
             'title' => __('AI Spam Closer Configuration'),
             'instructions' => __('Configure automatic spam detection and closing based on keywords in subject, content, and attachments.')
         );
+    }
+
+    function pre_save(&$config, &$errors) {
+        $result = true;
+
+        if ('openai' === $config['api_provider']) {
+            $config['api_url'] = 'https://api.openai.com/v1/chat/completions';
+        }
+
+        if (empty($config['api_url'])) {
+            $errors['api_url'] = __('API URL is required for Custom provider');
+            $result = false;
+        }
+
+        return $result;
     }
     
     /**

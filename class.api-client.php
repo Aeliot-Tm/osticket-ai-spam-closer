@@ -1,27 +1,28 @@
 <?php
 
 /**
- * OpenAI Client for Spam Detection
- * Handles AI-based spam detection using OpenAI API
+ * API Client for Spam Detection
+ * Handles AI-based spam detection using OpenAI-compatible API
  */
-class AISpamCloserOpenAIClient {
+class AISpamCloserAPIClient {
     
-    private $api_key;
-    private $model;
-    private $timeout;
-    private $api_url = 'https://api.openai.com/v1/chat/completions';
-    private $enable_logging;
+    private string $api_key;
+    private string $api_url;
+    private bool $enable_logging;
+    private string $model;
+    private int $timeout;
     
-    public function __construct($api_key, $model = 'gpt-4o-mini', $timeout = 30, $enable_logging = false) {
+    public function __construct(string $api_key, string $model, string $api_url, int $timeout, bool $enable_logging) {
         $this->api_key = trim($api_key);
         $this->model = $model;
+        $this->api_url = $api_url;
         $this->timeout = $timeout;
         $this->enable_logging = $enable_logging;
     }
     
     /**
      * Analyze ticket content for spam using AI
-     * 
+     *
      * @param string $ticket_content Full ticket content
      * @param array $spam_keywords Known spam keywords for context
      * @return array Result with spam detection
@@ -90,7 +91,7 @@ class AISpamCloserOpenAIClient {
     
     /**
      * Extract text from image using GPT-4 Vision API
-     * 
+     *
      * @param string $file_data Binary file data
      * @param string $mime_type MIME type of the image
      * @return array Result with extracted text or error
@@ -144,7 +145,7 @@ class AISpamCloserOpenAIClient {
     
     /**
      * Make HTTP request to OpenAI API
-     * 
+     *
      * @param array $messages Messages array for chat completion
      * @param string $model Model to use (override default)
      * @param bool $json_mode Enable JSON response mode
@@ -217,4 +218,3 @@ class AISpamCloserOpenAIClient {
         );
     }
 }
-
