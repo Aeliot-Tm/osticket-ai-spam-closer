@@ -2,7 +2,7 @@
 
 return array(
     'id' =>             'osticket:ai-spam-closer',
-    'version' =>        '1.0.0',
+    'version' =>        '1.1.0',
     'name' =>           'AI Spam Closer',
     'author' =>         'Anatoly Melnikov',
     'description' =>    'Automatically detect and close spam tickets based on keywords in subject, body, and attachments.',
