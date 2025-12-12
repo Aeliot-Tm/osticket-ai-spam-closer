@@ -184,7 +184,7 @@ Files that are too large, unsupported, or fail to process are logged but don't p
 ### Internal Notes
 
 Each spam detection and closure operation is recorded as an internal note:
-- **Poster**: `SYSTEM`
+- **Poster**: `AI Spam Closer`
 - **Title**: `Spam Detected - Auto Closed`
 - **Content**: 
   - Close reason text (from config)
