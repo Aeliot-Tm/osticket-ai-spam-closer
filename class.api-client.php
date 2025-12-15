@@ -12,14 +12,16 @@ class AISpamCloserAPIClient {
     private string $model;
     private float $temperature;
     private int $timeout;
+    private ?string $vision_model;
     
-    public function __construct(string $api_key, string $model, string $api_url, int $timeout, bool $enable_logging, float $temperature) {
+    public function __construct(string $api_url, string $api_key, string $model, ?string $vision_model, int $timeout, bool $enable_logging, float $temperature) {
         $this->api_key = trim($api_key);
         $this->model = $model;
         $this->api_url = $api_url;
         $this->timeout = $timeout;
         $this->enable_logging = $enable_logging;
         $this->temperature = $temperature;
+        $this->vision_model = $vision_model ? trim($vision_model) : null;
     }
     
     /**
@@ -96,7 +98,8 @@ class AISpamCloserAPIClient {
      *
      * @param string $file_data Binary file data
      * @param string $mime_type MIME type of the image
-     * @return array Result with extracted text or error
+     *
+     * @return array{success: bool, text?: string, error?: string} Result with extracted text or error
      */
     public function extractTextFromImage($file_data, $mime_type) {
         // Convert to base64
@@ -109,6 +112,15 @@ class AISpamCloserAPIClient {
                 'success' => false,
                 'error' => 'Unsupported image type: ' . $mime_type
             );
+        }
+        
+        // Prefer dedicated vision model, otherwise fall back to general model, then default
+        $vision_model = $this->vision_model ?: $this->model;
+        if (!$vision_model) {
+            $vision_model = 'gpt-4o';
+            if ($this->enable_logging) {
+                error_log("AI Spam Closer - Falling back to vision model gpt-4o (configured model: {$this->model})");
+            }
         }
         
         $messages = array(
@@ -133,7 +145,7 @@ class AISpamCloserAPIClient {
             )
         );
         
-        $result = $this->makeRequest($messages, 'gpt-4o'); // Use gpt-4o for vision
+        $result = $this->makeRequest($messages, $vision_model, false); // Use vision-capable model
         
         if (!$result['success']) {
             return $result;
@@ -148,14 +160,15 @@ class AISpamCloserAPIClient {
     /**
      * Make HTTP request to OpenAI API
      *
-     * @param array $messages Messages array for chat completion
+     * @param array<int,array<string,string>> $messages Messages array for chat completion
      * @param string $model Model to use (override default)
      * @param bool $json_mode Enable JSON response mode
-     * @return array Result with data or error
+     *
+     * @return array{success: bool, data?: string, error?: string} Result with data or error
      */
-    private function makeRequest($messages, $model = null, $json_mode = false) {
+    private function makeRequest(array $messages, string $model, bool $json_mode): array {
         $data = array(
-            'model' => $model ?: $this->model,
+            'model' => $model,
             'messages' => $messages,
             'temperature' => $this->temperature
         );
