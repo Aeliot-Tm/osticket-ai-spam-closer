@@ -16,11 +16,11 @@ class AISpamCloserAPIClient {
     
     public function __construct(string $api_url, string $api_key, string $model, ?string $vision_model, int $timeout, bool $enable_logging, float $temperature) {
         $this->api_key = trim($api_key);
-        $this->model = $model;
         $this->api_url = $api_url;
-        $this->timeout = $timeout;
+        $this->model = $model;
         $this->enable_logging = $enable_logging;
         $this->temperature = $temperature;
+        $this->timeout = $timeout;
         $this->vision_model = $vision_model ? trim($vision_model) : null;
     }
     
@@ -161,7 +161,7 @@ class AISpamCloserAPIClient {
      * Make HTTP request to OpenAI API
      *
      * @param array<int,array<string,string>> $messages Messages array for chat completion
-     * @param string $model Model to use (override default)
+     * @param string $model Model to use
      * @param bool $json_mode Enable JSON response mode
      *
      * @return array{success: bool, data?: string, error?: string} Result with data or error
@@ -188,10 +188,16 @@ class AISpamCloserAPIClient {
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $json_data);
         curl_setopt($ch, CURLOPT_TIMEOUT, $this->timeout);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, array(
+        
+        $headers = array(
             'Content-Type: application/json',
             'Authorization: Bearer ' . $this->api_key
-        ));
+        );
+        if ($json_mode) {
+            $headers[] = 'Accept: application/json';
+        }
+        
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         
         $response = curl_exec($ch);
         $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -220,16 +226,36 @@ class AISpamCloserAPIClient {
             error_log("AI Spam Closer - API Response: " . $response);
         }
         
-        if (!isset($result['choices'][0]['message']['content'])) {
+        $content = $result['choices'][0]['message']['content'] ?? null;
+        
+        // OpenAI can return either a string or an array of content parts (for vision)
+        if (is_array($content)) {
+            $parts = array();
+            foreach ($content as $part) {
+                if (is_array($part) && ($part['type'] ?? '') === 'text' && isset($part['text'])) {
+                    $parts[] = $part['text'];
+                }
+            }
+            $content = trim(implode("\n", $parts));
+        }
+
+        if (!is_string($content)) {
             return array(
                 'success' => false,
                 'error' => 'Invalid API response format'
             );
         }
+
+        if ($content === '') {
+            return array(
+                'success' => false,
+                'error' => 'API response contained no text content'
+            );
+        }
         
         return array(
             'success' => true,
-            'data' => $result['choices'][0]['message']['content']
+            'data' => $content
         );
     }
 }

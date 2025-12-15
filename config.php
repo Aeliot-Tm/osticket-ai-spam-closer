@@ -204,7 +204,14 @@ class AISpamCloserConfig extends PluginConfig {
                     'length' => 3
                 ),
                 'hint' => __('Maximum file size to process for text extraction')
-            ))
+            )),
+            'show_files_info' => new BooleanField(array(
+                'label' => __('Show processed files info'),
+                'default' => false,
+                'configuration' => array(
+                    'desc' => __('Add analyzed file contents and/or names of ignored files to the spam detection note (debug mode)')
+                )
+            )),
         );
     }
     
