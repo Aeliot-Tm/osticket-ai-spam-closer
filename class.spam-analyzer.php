@@ -44,6 +44,8 @@ class AISpamCloserAnalyzer {
      * @return array Result with spam detection
      */
     public function analyzeTicket($ticket) {
+        $analyzed_files = array();
+        $ignored_files = array();
         try {
             
             // Get spam keywords
@@ -51,12 +53,17 @@ class AISpamCloserAnalyzer {
             if (empty($keywords)) {
                 return array(
                     'success' => false,
-                    'error' => 'No spam keywords configured'
+                    'error' => 'No spam keywords configured',
+                    'analyzed_files' => $analyzed_files,
+                    'ignored_files' => $ignored_files
                 );
             }
             
             // Extract all content from ticket
-            $content = $this->extractTicketContent($ticket);
+            $content_data = $this->extractTicketContent($ticket);
+            $content = $content_data['content'];
+            $analyzed_files = $content_data['analyzed_files'];
+            $ignored_files = $content_data['ignored_files'];
             
             // Collect debug info
             $debug_info = array(
@@ -100,6 +107,9 @@ class AISpamCloserAnalyzer {
                         $result['debug'] = $debug_info;
                     }
                     
+                    $result['analyzed_files'] = $analyzed_files;
+                    $result['ignored_files'] = $ignored_files;
+                    
                     return $result;
                 }
             }
@@ -114,7 +124,9 @@ class AISpamCloserAnalyzer {
                 $result = array(
                     'success' => true,
                     'is_spam' => false,
-                    'message' => 'No spam keywords found (AI not configured)'
+                    'message' => 'No spam keywords found (AI not configured)',
+                    'analyzed_files' => $analyzed_files,
+                    'ignored_files' => $ignored_files
                 );
                 
                 if ($this->config->get('enable_logging')) {
@@ -139,7 +151,9 @@ class AISpamCloserAnalyzer {
                         'is_spam' => true,
                         'confidence' => $aiResult['confidence'],
                         'spam_indicators' => $indicators,
-                        'reason' => 'AI detected spam (confidence: ' . $aiResult['confidence'] . '%): ' . $aiResult['reasoning']
+                        'reason' => 'AI detected spam (confidence: ' . $aiResult['confidence'] . '%): ' . $aiResult['reasoning'],
+                        'analyzed_files' => $analyzed_files,
+                        'ignored_files' => $ignored_files
                     );
                 }
                 
@@ -151,7 +165,9 @@ class AISpamCloserAnalyzer {
                     'success' => true,
                     'is_spam' => false,
                     'confidence' => $aiResult['confidence'],
-                    'message' => 'AI determined this is not spam (confidence: ' . $aiResult['confidence'] . '%)'
+                    'message' => 'AI determined this is not spam (confidence: ' . $aiResult['confidence'] . '%)',
+                    'analyzed_files' => $analyzed_files,
+                    'ignored_files' => $ignored_files
                 );
                 
                 if ($this->config->get('enable_logging')) {
@@ -171,19 +187,25 @@ class AISpamCloserAnalyzer {
                 return array(
                     'success' => true,
                     'is_spam' => false,
-                    'message' => 'No spam keywords found (AI unavailable)'
+                    'message' => 'No spam keywords found (AI unavailable)',
+                    'analyzed_files' => $analyzed_files,
+                    'ignored_files' => $ignored_files
                 );
             }
             
             return array(
                 'success' => false,
-                'error' => 'AI analysis failed and no keywords configured: ' . ($aiResult['error'] ?? 'Unknown error')
+                'error' => 'AI analysis failed and no keywords configured: ' . ($aiResult['error'] ?? 'Unknown error'),
+                'analyzed_files' => $analyzed_files,
+                'ignored_files' => $ignored_files
             );
             
         } catch (Exception $e) {
             return array(
                 'success' => false,
-                'error' => 'Exception: ' . $e->getMessage()
+                'error' => 'Exception: ' . $e->getMessage(),
+                'analyzed_files' => $analyzed_files,
+                'ignored_files' => $ignored_files
             );
         }
     }
@@ -192,10 +214,12 @@ class AISpamCloserAnalyzer {
      * Extract all content from ticket including subject, body, and attachments
      * 
      * @param Ticket $ticket
-     * @return string Combined content
+     * @return array Combined content
      */
     private function extractTicketContent($ticket) {
         $content = array();
+        $analyzed_files = array();
+        $ignored_files = array();
         
         // Add subject
         $subject = $ticket->getSubject();
@@ -221,29 +245,43 @@ class AISpamCloserAnalyzer {
                 // Process attachments
                 if ($entry->has_attachments && isset($entry->attachments)) {
                     foreach ($entry->attachments as $attachment) {
-                        $file_text = $this->processAttachment($attachment);
-                        if ($file_text) {
-                            $content[] = 'File content: ' . $file_text;
+                        $file_info = $this->processAttachment($attachment);
+                        if ($file_info['content'] ?? false) {
+                            $content[] = 'File content: ' . $file_info['content'];
+                        }
+                        if ($file_info['ignored']) {
+                            $ignored_files[] = $file_info;
+                        } else {
+                            $analyzed_files[] = $file_info;
                         }
                     }
                 }
             }
         }
         
-        return implode("\n\n", $content);
+        return array(
+            'content' => implode("\n\n", $content),
+            'analyzed_files' => $analyzed_files,
+            'ignored_files' => $ignored_files
+        );
     }
     
     /**
      * Extract text from attachment file
      * 
-     * @param object $attachment Attachment object
-     * @return string|null Extracted text or null
+     * @param Attachment $attachment Attachment object
+     *
+     * @return array{ignored: bool, filename: string, content?: string, reason?: string}
      */
-    private function processAttachment($attachment) {
+    private function processAttachment($attachment): array {
         try {
             $file = $attachment->getFile();
             if (!$file) {
-                return null;
+                return array(
+                    'ignored' => true,
+                    'filename' => $attachment->getFilename() ?? 'Unknown',
+                    'reason' => 'File could not be accessed or processed'
+                );
             }
             
             $filename = $attachment->getFilename();
@@ -256,51 +294,109 @@ class AISpamCloserAnalyzer {
                 if ($this->config->get('enable_logging')) {
                     error_log("AI Spam Closer - File too large: $filename ($size bytes)");
                 }
-                return null;
+                return array(
+                    'filename' => $filename,
+                    'ignored' => true,
+                    'reason' => sprintf('File size (%s) exceeds maximum allowed size (%s MB)',
+                        $this->formatFileSize($size),
+                        $this->config->get('max_file_size'))
+                );
             }
             
             if ($this->config->get('enable_logging')) {
                 error_log("AI Spam Closer - Processing file: $filename (type: $mime_type, size: $size)");
             }
             
+            $file_text = null;
+            $extraction_error = null;
+            
             // Handle images with Vision API
             if (preg_match('/^image\/(jpeg|jpg|png|gif|webp)$/i', $mime_type)) {
-                return $this->extractTextFromImage($file);
+                $vision_result = $this->extractTextFromImage($file);
+                if (!$vision_result['success']) {
+                    $reason = 'Image text extraction failed';
+                    if (!empty($vision_result['error'])) {
+                        $reason .= ': ' . $vision_result['error'];
+                    }
+                    return array(
+                        'filename' => $filename,
+                        'ignored' => true,
+                        'reason' => $reason
+                    );
+                }
+                
+                $file_text = (string) ($vision_result['text'] ?? '');
+                
+                if ('' !== $file_text && strcasecmp(trim($file_text), 'No text found') === 0) {
+                    return array(
+                        'filename' => $filename,
+                        'ignored' => true,
+                        'reason' => 'Vision API reported no readable text in the image'
+                    );
+                }
             }
-            
             // Handle plain text files
-            if (preg_match('/^text\//i', $mime_type)) {
-                return $file->getData();
+            elseif (preg_match('/^text\//i', $mime_type)) {
+                $file_text = $file->getData();
+                $extraction_error = 'Unable to extract text from plain text file';
             }
-            
             // Handle PDF files
-            if ($mime_type == 'application/pdf') {
-                return $this->extractTextFromPDF($file);
+            elseif ($mime_type == 'application/pdf') {
+                $file_text = $this->extractTextFromPDF($file);
+                $extraction_error = 'Unable to extract text from PDF';
             }
-            
             // Handle Word documents
-            if (preg_match('/word|officedocument\.wordprocessing/i', $mime_type)) {
-                return $this->extractTextFromWord($file);
+            elseif (preg_match('/word|officedocument\.wordprocessing/i', $mime_type)) {
+                $file_text = $this->extractTextFromWord($file);
+                $extraction_error = 'Unable to extract text from Word document';
+            }
+            else {
+                if ($this->config->get('enable_logging')) {
+                    error_log("AI Spam Closer - Unsupported file type: $mime_type");
+                }
+                return array(
+                    'filename' => $filename,
+                    'ignored' => true,
+                    'reason' => 'Unsupported file type: ' . $mime_type
+                );
             }
             
-            if ($this->config->get('enable_logging')) {
-                error_log("AI Spam Closer - Unsupported file type: $mime_type");
+            if (null !== $file_text) {
+                $file_text = trim((string) $file_text);
             }
             
-            return null;
+            if (!$file_text) {
+                return array(
+                    'filename' => $filename,
+                    'ignored' => true,
+                    'reason' => $extraction_error ?: 'No text content returned after extraction'
+                );
+            }
+            
+            return array(
+                'filename' => $filename,
+                'ignored' => false,
+                'content' => $file_text
+            );
             
         } catch (Exception $e) {
             if ($this->config->get('enable_logging')) {
                 error_log("AI Spam Closer - Error processing attachment: " . $e->getMessage());
             }
-            return null;
+            return array(
+                'filename' => $attachment->getFilename() ?? 'Unknown',
+                'ignored' => true,
+                'reason' => 'Error processing file: ' . $e->getMessage()
+            );
         }
     }
     
     /**
      * Extract text from image using AI
+     *
+     * @return array{success: bool, text?: string, error?: string}
      */
-    private function extractTextFromImage($file) {
+    private function extractTextFromImage($file): array {
         $file_data = $file->getData();
         $mime_type = $file->getType();
         
@@ -314,14 +410,20 @@ class AISpamCloserAnalyzer {
             if ($this->config->get('enable_logging')) {
                 error_log("AI Spam Closer - Successfully extracted " . strlen($result['text']) . " bytes from image using Vision API");
             }
-            return $result['text'];
+            return array(
+                'success' => true,
+                'text' => $result['text'] ?? '',
+            );
         }
         
         if ($this->config->get('enable_logging')) {
             error_log("AI Spam Closer - Image extraction failed: " . ($result['error'] ?? 'Unknown error'));
         }
         
-        return null;
+        return array(
+            'success' => false,
+            'error' => $result['error'] ?? 'Unknown error'
+        );
     }
     
     /**
@@ -547,7 +649,7 @@ class AISpamCloserAnalyzer {
      * @param string $reason Reason for closing
      * @return array{closed: bool, message: string } Success status
      */
-    public function closeTicket($ticket, $reason) {
+    public function closeTicket($ticket, $reason, $analyzed_files = array(), $ignored_files = array()) {
         try {
             // Check if ticket is already closed
             $status = $ticket->getStatus();
@@ -568,6 +670,9 @@ class AISpamCloserAnalyzer {
                 htmlspecialchars($close_reason_text),
                 htmlspecialchars($reason)
             );
+            
+            $note_body .= $this->getAnalyzedFilesNote($analyzed_files);
+            $note_body .= $this->getIgnoredFilesNote($ignored_files);
             
             $ticket->logNote($note_title, $note_body, $this->notePoster, false);
             
@@ -607,10 +712,13 @@ class AISpamCloserAnalyzer {
      * @param Ticket $ticket
      * @param string $reason Reason why check failed
      */
-    public function logCheckFailure($ticket, $reason) {
+    public function logCheckFailure($ticket, $reason, $analyzed_files = array(), $ignored_files = array()) {
         try {
             $note_title = 'Spam Check - Not Performed';
             $note_body = 'Automatic spam check was not performed.<br><br>Reason: ' . htmlspecialchars($reason);
+            
+            $note_body .= $this->getAnalyzedFilesNote($analyzed_files);
+            $note_body .= $this->getIgnoredFilesNote($ignored_files);
             
             $ticket->logNote($note_title, $note_body, $this->notePoster, false);
             
@@ -619,6 +727,65 @@ class AISpamCloserAnalyzer {
                 error_log("AI Spam Closer - Failed to log check failure: " . $e->getMessage());
             }
         }
+    }
+
+    /**
+     * Format file size in human-readable format
+     *
+     * @param int $bytes File size in bytes
+     * @return string Formatted size
+     */
+    private function formatFileSize($bytes) {
+        if ($bytes >= 1073741824) {
+            return number_format($bytes / 1073741824, 2) . ' GB';
+        } elseif ($bytes >= 1048576) {
+            return number_format($bytes / 1048576, 2) . ' MB';
+        } elseif ($bytes >= 1024) {
+            return number_format($bytes / 1024, 2) . ' KB';
+        } else {
+            return $bytes . ' bytes';
+        }
+    }
+    
+    /**
+     * @param array<array<string,mixed>> $analyzed_files
+     * @return string
+     */
+    private function getAnalyzedFilesNote($analyzed_files)
+    {
+        $note_body = '';
+        if ($this->config->get('show_files_info') && $analyzed_files) {
+            $note_body .= '<br><br>';
+            
+            foreach ($analyzed_files as $file_info) {
+                $note_body .= '<hr>';
+                $note_body .= 'Text from file \'' . htmlspecialchars($file_info['filename']) . '\'<br>';
+                $note_body .= '<pre>' . htmlspecialchars($file_info['content']) . '</pre>';
+            }
+        }
+        
+        return $note_body;
+    }
+    
+    /**
+     * @param array<array<string,mixed>> $ignored_files
+     * @return string
+     */
+    private function getIgnoredFilesNote($ignored_files)
+    {
+        $note_body = '';
+        if ($this->config->get('show_files_info') && $ignored_files) {
+            $note_body .= '<br><br>';
+            $note_body .= '<hr>';
+            $note_body .= '<strong>Ignored files:</strong><br>';
+            $note_body .= '<ul>';
+            foreach ($ignored_files as $file_info) {
+                $note_body .= '<li>' . htmlspecialchars($file_info['filename']) . ' - ' . htmlspecialchars($file_info['reason']) . '</li>';
+            }
+            $note_body .= '</ul>';
+        }
+        
+        return $note_body;
     }
 }
 

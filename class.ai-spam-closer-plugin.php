@@ -76,13 +76,20 @@ class AISpamCloserPlugin extends Plugin {
             // Close ticket
             $result = array_merge($result, $analyzer->closeTicket(
                 $ticket,
-                $result['reason']
+                $result['reason'],
+                $result['analyzed_files'] ?? array(),
+                $result['ignored_files'] ?? array()
             ));
         }
         
         if ($result['success'] && isset($result['is_spam']) && !$result['is_spam']) {
             $result = array_merge($result, ['closed' => false, 'message' => 'No spam keywords detected']);
-            $analyzer->logCheckFailure($ticket, 'No spam keywords detected');
+            $analyzer->logCheckFailure(
+                $ticket,
+                'No spam keywords detected',
+                $result['analyzed_files'] ?? array(),
+                $result['ignored_files'] ?? array()
+            );
         }
         
         return $result;
