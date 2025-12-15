@@ -96,6 +96,35 @@ class AISpamCloserConfig extends PluginConfig {
     
     function getOptions() {
         return array(
+            'spam_keywords' => new TextareaField(array(
+                'label' => __('Spam Keywords (Fallback)'),
+                'required' => false,
+                'default' => 'viagra, casino, lottery, winner, click here, buy now, limited offer, earn money fast, work from home, make money online, free money, get paid, amazing offer',
+                'configuration' => array(
+                    'rows' => 10,
+                    'cols' => 60,
+                    'html' => false,
+                    'placeholder' => 'Enter keywords separated by comma or semicolon'
+                ),
+                'hint' => __('Fallback keywords if AI analysis fails. Use comma (,) or semicolon (;) as separators.')
+            )),
+            'close_reason' => new TextareaField(array(
+                'label' => __('Close Reason Text'),
+                'default' => 'This ticket has been automatically closed as spam based on content analysis.',
+                'required' => true,
+                'configuration' => array(
+                    'rows' => 3,
+                    'cols' => 60
+                ),
+                'hint' => __('Internal note text to add when closing spam tickets')
+            )),
+            'auto_close' => new BooleanField(array(
+                'label' => __('Auto-close on ticket creation'),
+                'default' => true,
+                'configuration' => array(
+                    'desc' => __('Automatically analyze and close new tickets if spam is detected')
+                )
+            )),
             'api_provider' => new ChoiceField(array(
                 'label' => __('API Provider'),
                 'default' => 'openai',
@@ -137,17 +166,6 @@ class AISpamCloserConfig extends PluginConfig {
                 'required' => false,
                 'hint' => __('Optional: Vision-capable model for image text extraction (e.g., gpt-4o). Autocomplete suggests common OpenAI vision models, but any model name is allowed.')
             )),
-            'timeout' => new TextboxField(array(
-                'label' => __('API Timeout (seconds)'),
-                'default' => '30',
-                'required' => true,
-                'validator' => 'number',
-                'configuration' => array(
-                    'size' => 10,
-                    'length' => 3
-                ),
-                'hint' => __('Maximum time to wait for OpenAI response')
-            )),
             'temperature' => new TextboxField(array(
                 'label' => __('Temperature'),
                 'default' => '0.3',
@@ -158,41 +176,16 @@ class AISpamCloserConfig extends PluginConfig {
                 ),
                 'hint' => __('Advanced: Controls response randomness (0.0-2.0). Lower = more deterministic. Default: 0.3')
             )),
-            'spam_keywords' => new TextareaField(array(
-                'label' => __('Spam Keywords (Fallback)'),
-                'required' => false,
-                'default' => 'viagra, casino, lottery, winner, click here, buy now, limited offer, earn money fast, work from home, make money online, free money, get paid, amazing offer',
-                'configuration' => array(
-                    'rows' => 10,
-                    'cols' => 60,
-                    'html' => false,
-                    'placeholder' => 'Enter keywords separated by comma or semicolon'
-                ),
-                'hint' => __('Fallback keywords if AI analysis fails. Use comma (,) or semicolon (;) as separators.')
-            )),
-            'close_reason' => new TextareaField(array(
-                'label' => __('Close Reason Text'),
-                'default' => 'This ticket has been automatically closed as spam based on content analysis.',
+            'timeout' => new TextboxField(array(
+                'label' => __('API Timeout (seconds)'),
+                'default' => '30',
                 'required' => true,
+                'validator' => 'number',
                 'configuration' => array(
-                    'rows' => 3,
-                    'cols' => 60
+                    'size' => 10,
+                    'length' => 3
                 ),
-                'hint' => __('Internal note text to add when closing spam tickets')
-            )),
-            'auto_close' => new BooleanField(array(
-                'label' => __('Auto-close on ticket creation'),
-                'default' => true,
-                'configuration' => array(
-                    'desc' => __('Automatically analyze and close new tickets if spam is detected')
-                )
-            )),
-            'enable_logging' => new BooleanField(array(
-                'label' => __('Enable Debug Logging'),
-                'default' => false,
-                'configuration' => array(
-                    'desc' => __('Log processing details for debugging')
-                )
+                'hint' => __('Maximum time to wait for OpenAI response')
             )),
             'max_file_size' => new TextboxField(array(
                 'label' => __('Max File Size (MB)'),
@@ -210,6 +203,13 @@ class AISpamCloserConfig extends PluginConfig {
                 'default' => false,
                 'configuration' => array(
                     'desc' => __('Add analyzed file contents and/or names of ignored files to the spam detection note (debug mode)')
+                )
+            )),
+            'enable_logging' => new BooleanField(array(
+                'label' => __('Enable Debug Logging'),
+                'default' => false,
+                'configuration' => array(
+                    'desc' => __('Log processing details for debugging')
                 )
             )),
         );

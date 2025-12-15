@@ -209,6 +209,93 @@ class AISpamCloserAnalyzer {
             );
         }
     }
+
+    /**
+     * Close ticket as spam
+     *
+     * @param Ticket $ticket
+     * @param string $reason Reason for closing
+     * @return array{closed: bool, message: string } Success status
+     */
+    public function closeTicket($ticket, $reason, $analyzed_files = array(), $ignored_files = array()) {
+        try {
+            // Check if ticket is already closed
+            $status = $ticket->getStatus();
+            if ($status && $status->getState() == 'closed') {
+                if ($this->config->get('enable_logging')) {
+                    error_log("AI Spam Closer - Ticket already closed");
+                }
+                return ['closed' => false, 'message' => 'Spam detected but ticket was not closed(Ticket already closed)'];
+            }
+
+            // Get close reason text from config
+            $close_reason_text = $this->config->get('close_reason') ?: 'Closed as spam';
+
+            // Log internal note
+            $note_title = 'Spam Detected - Auto Closed';
+            $note_body = sprintf(
+                '%s<br><br>Reason: %s',
+                htmlspecialchars($close_reason_text),
+                htmlspecialchars($reason)
+            );
+
+            $note_body .= $this->getAnalyzedFilesNote($analyzed_files);
+            $note_body .= $this->getIgnoredFilesNote($ignored_files);
+
+            $ticket->logNote($note_title, $note_body, $this->notePoster, false);
+
+            // Close the ticket
+            // Find a closed status
+            $closed_status = null;
+            foreach (TicketStatusList::getStatuses() as $status) {
+                if ($status->getState() == 'closed') {
+                    $closed_status = $status;
+                    break;
+                }
+            }
+
+            if (!$closed_status) {
+                if ($this->config->get('enable_logging')) {
+                    error_log("AI Spam Closer - No closed status found");
+                }
+
+                return ['closed' => false, 'message' => 'Spam detected but ticket was not closed (No closed status found)'];
+            }
+
+            $ticket->setStatus($closed_status);
+
+            return ['closed' => true, 'message' => 'Ticket identified as spam and closed'];
+
+        } catch (Exception $e) {
+            if ($this->config->get('enable_logging')) {
+                error_log("AI Spam Closer - Close failed: " . $e->getMessage());
+            }
+            return ['closed' => false, 'message' => 'Spam detected but ticket was not closed. EXCEPTION: ' . $e->getMessage()];
+        }
+    }
+
+    /**
+     * Log a note when spam check cannot be performed
+     *
+     * @param Ticket $ticket
+     * @param string $reason Reason why check failed
+     */
+    public function logCheckFailure($ticket, $reason, $analyzed_files = array(), $ignored_files = array()) {
+        try {
+            $note_title = 'Spam Check - Not Performed';
+            $note_body = 'Automatic spam check was not performed.<br><br>Reason: ' . htmlspecialchars($reason);
+
+            $note_body .= $this->getAnalyzedFilesNote($analyzed_files);
+            $note_body .= $this->getIgnoredFilesNote($ignored_files);
+
+            $ticket->logNote($note_title, $note_body, $this->notePoster, false);
+
+        } catch (Exception $e) {
+            if ($this->config->get('enable_logging')) {
+                error_log("AI Spam Closer - Failed to log check failure: " . $e->getMessage());
+            }
+        }
+    }
     
     /**
      * Extract all content from ticket including subject, body, and attachments
@@ -640,93 +727,6 @@ class AISpamCloserAnalyzer {
             'is_spam' => !empty($matched_keywords),
             'matched_keywords' => $matched_keywords
         );
-    }
-    
-    /**
-     * Close ticket as spam
-     * 
-     * @param Ticket $ticket
-     * @param string $reason Reason for closing
-     * @return array{closed: bool, message: string } Success status
-     */
-    public function closeTicket($ticket, $reason, $analyzed_files = array(), $ignored_files = array()) {
-        try {
-            // Check if ticket is already closed
-            $status = $ticket->getStatus();
-            if ($status && $status->getState() == 'closed') {
-                if ($this->config->get('enable_logging')) {
-                    error_log("AI Spam Closer - Ticket already closed");
-                }
-                return ['closed' => false, 'message' => 'Spam detected but ticket was not closed(Ticket already closed)'];
-            }
-            
-            // Get close reason text from config
-            $close_reason_text = $this->config->get('close_reason') ?: 'Closed as spam';
-            
-            // Log internal note
-            $note_title = 'Spam Detected - Auto Closed';
-            $note_body = sprintf(
-                '%s<br><br>Reason: %s',
-                htmlspecialchars($close_reason_text),
-                htmlspecialchars($reason)
-            );
-            
-            $note_body .= $this->getAnalyzedFilesNote($analyzed_files);
-            $note_body .= $this->getIgnoredFilesNote($ignored_files);
-            
-            $ticket->logNote($note_title, $note_body, $this->notePoster, false);
-            
-            // Close the ticket
-            // Find a closed status
-            $closed_status = null;
-            foreach (TicketStatusList::getStatuses() as $status) {
-                if ($status->getState() == 'closed') {
-                    $closed_status = $status;
-                    break;
-                }
-            }
-            
-            if (!$closed_status) {
-                if ($this->config->get('enable_logging')) {
-                    error_log("AI Spam Closer - No closed status found");
-                }
-                
-                return ['closed' => false, 'message' => 'Spam detected but ticket was not closed (No closed status found)'];
-            }
-            
-            $ticket->setStatus($closed_status);
-            
-            return ['closed' => true, 'message' => 'Ticket identified as spam and closed'];
-            
-        } catch (Exception $e) {
-            if ($this->config->get('enable_logging')) {
-                error_log("AI Spam Closer - Close failed: " . $e->getMessage());
-            }
-            return ['closed' => false, 'message' => 'Spam detected but ticket was not closed. EXCEPTION: ' . $e->getMessage()];
-        }
-    }
-    
-    /**
-     * Log a note when spam check cannot be performed
-     * 
-     * @param Ticket $ticket
-     * @param string $reason Reason why check failed
-     */
-    public function logCheckFailure($ticket, $reason, $analyzed_files = array(), $ignored_files = array()) {
-        try {
-            $note_title = 'Spam Check - Not Performed';
-            $note_body = 'Automatic spam check was not performed.<br><br>Reason: ' . htmlspecialchars($reason);
-            
-            $note_body .= $this->getAnalyzedFilesNote($analyzed_files);
-            $note_body .= $this->getIgnoredFilesNote($ignored_files);
-            
-            $ticket->logNote($note_title, $note_body, $this->notePoster, false);
-            
-        } catch (Exception $e) {
-            if ($this->config->get('enable_logging')) {
-                error_log("AI Spam Closer - Failed to log check failure: " . $e->getMessage());
-            }
-        }
     }
 
     /**
