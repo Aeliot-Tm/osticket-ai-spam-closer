@@ -15,7 +15,9 @@ This plugin for [osTicket](https://github.com/osTicket/osTicket) automatically d
 - **Dual detection method**: fast keyword matching + AI analysis
 - **Confidence scoring** (0-100%) for spam detection
 - **Multiple API providers**: OpenAI or any OpenAI-compatible API endpoint
-- **Wide model selection**: GPT-5, GPT-4.1, GPT-4o, o-series reasoning models, and custom models
+- **Wide model selection**: GPT-6, GPT-5.6, GPT-5.x, GPT-4.1, GPT-4o, o-series reasoning models, and custom models
+- **Configurable reasoning effort** for supported models (analysis and vision OCR)
+- **Dedicated vision model** for image text extraction (optional, with autocomplete suggestions)
 - **Fallback mode**: works with keywords only when AI is unavailable
 - **Internal notes** with closure reason and spam indicators
 - **No email notifications** sent to users when closing spam tickets
@@ -46,11 +48,21 @@ This plugin for [osTicket](https://github.com/osTicket/osTicket) automatically d
    - Example: `https://api.example.com/v1/chat/completions`
    - For OpenAI provider, this is set automatically to `https://api.openai.com/v1/chat/completions`
 
-4. **Model Name** - AI model to use for analysis:
-   - **GPT-5 series** (latest):
-     - `gpt-5.2` - Latest, improved reasoning
+4. **Model Name** - AI model to use for analysis (default: `gpt-6-luna`):
+   - **GPT-6 series**:
+     - `gpt-6.1-sol` - GPT-6.1 Sol
+     - `gpt-6-astra` - GPT-6 Astra
+     - `gpt-6-sol` - GPT-6 Sol
+     - `gpt-6-luna` - GPT-6 Luna (default)
+   - **GPT-5.6 series**:
+     - `gpt-5.6-sol` / `gpt-5.6-terra` / `gpt-5.6-luna`
+   - **GPT-5.5 / GPT-5.4 series**:
+     - `gpt-5.5`
+     - `gpt-5.4` / `gpt-5.4-mini` / `gpt-5.4-nano`
+   - **GPT-5 series**:
+     - `gpt-5.2` - Improved reasoning
      - `gpt-5.1` - Coding & agentic tasks
-     - `gpt-5.1-codex` / `gpt-5.1-codex-mini` / `gpt-5.1-codex-max` - Optimized for code
+     - `gpt-5.1-codex` / `gpt-5.1-codex-mini` / `gpt-5.1-codex-max` - Responses API only (not selectable for Chat Completions in the dropdown)
      - `gpt-5-mini` - Fast, 400K context
      - `gpt-5-nano` - Fastest, cheapest
    - **Reasoning models** (o-series, think longer before responding):
@@ -69,16 +81,29 @@ This plugin for [osTicket](https://github.com/osTicket/osTicket) automatically d
    - For Custom provider: enter any model name manually
    - For OpenAI provider: select from dropdown
 
-5. **API Timeout** - maximum wait time for API response (seconds)
+5. **Reasoning Effort** - optional reasoning depth for supported models (default: `None`)
+   - Available levels depend on the selected analysis and vision models (e.g. `None`, `Minimal`, `Low`, `Medium`, `High`, `Extra High`, `Maximum`)
+   - Applies to spam analysis and image OCR when the chosen models support reasoning
+   - Higher levels may increase response time and cost
+   - If the current setting is not supported after you change models, the plugin falls back to the closest supported level
+
+6. **Vision Model** - optional model for image text extraction (default: `gpt-6-luna`)
+   - Used only for attached images (JPG, PNG, GIF, WebP); ticket analysis uses **Model Name** above
+   - Autocomplete suggests common vision-capable models; you can enter any model name
+   - Suggested models: `gpt-6.1-sol`, `gpt-6-astra`, `gpt-6-sol`, `gpt-6-luna`, `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.4-nano`, `gpt-4o`, `gpt-4o-mini`, `gpt-4.1`, `gpt-4.1-mini`, `gpt-4.1-nano`, `o3`, `o3-mini`, `o1`, `o1-mini`
+   - If empty, the analysis model is used; if that is also unset, the client falls back to `gpt-6-luna`
+
+7. **API Timeout** - maximum wait time for API response (seconds)
    - Default: `30` seconds
    - Increase if you experience timeout errors
 
-6. **Temperature** - controls response randomness (0.0-2.0)
+8. **Temperature** - controls response randomness (0.0-2.0)
    - Lower values = more deterministic responses
    - Higher values = more creative/random responses
    - Default: `0.3` (recommended for classification tasks)
    - Range: 0.0 to 2.0
    - **Note**: Lower temperature values (0.0-0.5) are recommended for spam detection to ensure consistent, deterministic results
+   - For supported reasoning models, temperature applies only when **Reasoning Effort** is `None`
 
 ### Spam Detection Settings
 
@@ -168,7 +193,7 @@ The plugin collects text from:
 - **Ticket subject** - full subject line
 - **Message body** - all thread entries, HTML stripped
 - **Attached images** (JPG, PNG, GIF, WebP):
-  - Uses AI Vision API (requires model with vision support, e.g., GPT-4o)
+  - Uses AI Vision API via **Vision Model** (e.g. `gpt-6-luna`, `gpt-4o`, or another vision-capable model)
   - OCR text extraction
 - **PDF files**:
   - Uses `pdftotext` utility (if installed)
@@ -270,7 +295,7 @@ verify account, update payment, account suspended, security alert, click to conf
 
 1. Check file sizes (don't exceed Max File Size setting)
 2. For PDF/Word: install pdftotext/antiword/catdoc utilities
-3. For images: verify model supports Vision API (gpt-4o, gpt-4o-mini, or compatible)
+3. For images: configure **Vision Model** and ensure it supports Vision API (e.g. `gpt-6-luna`, `gpt-4o`, `gpt-4o-mini`, or compatible)
 4. Check system logs for file processing errors
 
 ### False positives (legitimate tickets closed as spam)
@@ -299,7 +324,8 @@ verify account, update payment, account suspended, security alert, click to conf
 ## Usage Costs
 
 OpenAI API is paid, approximate prices (may vary):
-- **GPT-4o-mini**: ~$0.15 per 1M input tokens (recommended for spam detection)
+- **GPT-6 / GPT-5.6 / GPT-5.4 / GPT-5.5**: check current OpenAI pricing
+- **GPT-4o-mini**: ~$0.15 per 1M input tokens (affordable fallback)
 - **GPT-4o**: ~$5 per 1M input tokens
 - **GPT-4.1 series**: varies by tier
 - **o-series (reasoning)**: premium pricing
@@ -309,7 +335,7 @@ For Custom API providers, check your provider's pricing.
 
 **Cost optimization tips**:
 - Use keyword matching first (free, fast) - most spam will be caught here
-- Use `gpt-4o-mini` for AI analysis - best balance of cost and quality
+- Use a smaller/faster model (e.g. `gpt-6-luna`, `gpt-5.4-nano`, or `gpt-4o-mini`) for AI analysis when cost matters
 - Only process files when necessary (images, PDFs with text)
 - Monitor API usage in debug logs
 
